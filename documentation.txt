@@ -1,0 +1,526 @@
+================================================================================
+          FastAPI User Subscription Management Service - Documentation
+================================================================================
+Version: 1.1.0 (Includes JWT Authentication)
+Date: May 29, 2024
+
+Table of Contents:
+------------------
+1. Introduction
+2. Project Overview
+3. Features
+4. Technology Stack
+5. Project Structure
+6. Setup and Installation
+    6.1. Prerequisites
+    6.2. Cloning the Repository
+    6.3. Setting up the Python Virtual Environment
+    6.4. Installing Dependencies
+    6.5. Database Setup (MySQL)
+    6.6. Environment Configuration (.env file)
+    6.7. Running the Application
+    6.8. Creating Initial Database Tables & Seeding Plans
+7. API Endpoints and Usage
+    7.1. Authentication
+        7.1.1. Register User (POST /users/)
+        7.1.2. Login (Get JWT Token) (POST /token)
+    7.2. User Management
+        7.2.1. Get Current User Details (GET /users/me/)
+    7.3. Plan Management
+        7.3.1. Retrieve All Available Plans (GET /plans/)
+        7.3.2. Create New Plan (POST /plans/) - Requires Auth
+    7.4. Subscription Management (Requires Authentication)
+        7.4.1. Create New Subscription (POST /subscriptions/me/)
+        7.4.2. Retrieve User's Active Subscription (GET /subscriptions/me/)
+        7.4.3. Update User's Subscription Plan (PUT /subscriptions/me/)
+        7.4.4. Cancel User's Subscription (DELETE /subscriptions/me/)
+8. Background Tasks
+    8.1. Automatic Subscription Expiration
+9. Data Models
+    9.1. User Model
+    9.2. Plan Model
+    9.3. Subscription Model
+    9.4. Subscription Statuses
+10. Non-Functional Requirements Considerations
+    10.1. Scalability
+    10.2. Fault Tolerance
+    10.3. Performance
+    10.4. Security
+11. Further Development & Considerations
+12. Troubleshooting
+
+--------------------------------------------------------------------------------
+1. Introduction
+--------------------------------------------------------------------------------
+
+This document provides comprehensive information about the FastAPI User Subscription
+Management Service. It includes an overview of the project, setup instructions,
+API endpoint documentation, and details about its architecture and features.
+This service is designed to manage user subscriptions to various predefined plans,
+handle subscription lifecycles, and provide an interface for plan management.
+
+--------------------------------------------------------------------------------
+2. Project Overview
+--------------------------------------------------------------------------------
+
+The User Subscription Management Service is a RESTful API built using FastAPI and
+Python. It utilizes SQLAlchemy as an ORM for database interactions with a MySQL
+database. The service allows users to register, log in (obtaining a JWT token),
+subscribe to plans, view their current subscription, update their plan, and cancel
+their subscription. It also includes functionality for administrators (or authorized
+users) to define subscription plans and a background process to automatically
+expire subscriptions.
+
+--------------------------------------------------------------------------------
+3. Features
+--------------------------------------------------------------------------------
+
+*   **User Management:**
+    *   User registration with hashed password storage.
+    *   JWT-based authentication for secure endpoint access.
+*   **Plan Management:**
+    *   CRUD operations for defining subscription plans (name, price, features, duration).
+    *   Retrieval of all available plans.
+*   **Subscription Management:**
+    *   User subscription to a specific plan.
+    *   Retrieval of a user's active subscription details.
+    *   Upgrade/Downgrade of subscription plans.
+    *   Cancellation of subscriptions.
+*   **Subscription Lifecycle:**
+    *   Defined subscription statuses (ACTIVE, INACTIVE, CANCELLED, EXPIRED).
+    *   Automatic expiration of subscriptions based on their end date via a
+        scheduled background task.
+*   **API Documentation:**
+    *   Automatic interactive API documentation via Swagger UI (`/docs`) and ReDoc (`/redoc`).
+
+--------------------------------------------------------------------------------
+4. Technology Stack
+--------------------------------------------------------------------------------
+
+*   **Backend Framework:** FastAPI
+*   **Programming Language:** Python 3.10+
+*   **Database:** MySQL
+*   **ORM:** SQLAlchemy
+*   **Data Validation:** Pydantic
+*   **Authentication:** JWT (JSON Web Tokens) using `python-jose`
+*   **Password Hashing:** `passlib` with bcrypt
+*   **ASGI Server:** Uvicorn
+*   **Background Scheduler:** `schedule` library with `threading`
+*   **Environment Management:** `python-dotenv`
+
+--------------------------------------------------------------------------------
+5. Project Structure
+--------------------------------------------------------------------------------
+
+subscription_service/
+├── app/
+│   ├── __init__.py
+│   ├── auth.py             # Authentication logic (JWT, password hashing)
+│   ├── crud.py             # Database Create, Read, Update, Delete operations
+│   ├── database.py         # Database engine and session setup
+│   ├── main.py             # FastAPI application instance and endpoint definitions
+│   ├── models.py           # SQLAlchemy ORM models
+│   ├── schemas.py          # Pydantic models for request/response validation
+│   └── services/
+│       ├── __init__.py
+│       └── scheduler.py    # Background task for subscription expiration
+├── .env.example            # Example environment configuration file
+├── .env                    # Actual environment configuration file (to be created by user)
+├── requirements.txt        # Python package dependencies
+└── DOCUMENTATION.txt       # This file
+
+--------------------------------------------------------------------------------
+6. Setup and Installation
+--------------------------------------------------------------------------------
+
+Follow these steps to set up and run the project locally.
+
+    6.1. Prerequisites
+    ------------------
+    *   Python 3.10 or higher.
+    *   pip (Python package installer).
+    *   Git (for cloning the repository).
+    *   A running MySQL server instance.
+
+    6.2. Cloning the Repository
+    ---------------------------
+    ```bash
+    git clone https://github.com/drishlekh/Subscription-Based-Model
+    cd subscription_service
+    ```
+    
+
+    6.3. Setting up the Python Virtual Environment
+    ---------------------------------------------
+    It is highly recommended to use a virtual environment.
+    ```bash
+    python -m venv venv
+    ```
+    Activate the virtual environment:
+    *   On Windows:
+        ```bash
+        .\venv\Scripts\activate
+        ```
+    *   On macOS/Linux:
+        ```bash
+        source venv/bin/activate
+        ```
+
+    6.4. Installing Dependencies
+    ----------------------------
+    With the virtual environment activated, install the required Python packages:
+    ```bash
+    pip install -r requirements.txt
+    ```
+    
+
+    6.5. Database Setup (MySQL)
+    ---------------------------
+    1.  Ensure your MySQL server is running.
+    2.  Connect to your MySQL server using a client (e.g., MySQL Workbench, DBeaver, command line).
+    3.  Create a new database for this project. For example:
+        ```sql
+        CREATE DATABASE subscription_db;
+        ```
+        Note the database name, username, password, host, and port for the next step.
+
+    6.6. Environment Configuration (.env file)
+    ------------------------------------------
+    1.  In the project root directory (`subscription_service/`), create a file named `.env`.
+    2.  You can copy the structure from `.env.example` if provided, or create it manually.
+    3.  Populate the `.env` file with your specific configurations:
+
+        ```env
+        # Database Configuration
+        DATABASE_URL=mysql+mysqlclient://YOUR_MYSQL_USER:YOUR_MYSQL_PASSWORD@YOUR_MYSQL_HOST:YOUR_MYSQL_PORT/subscription_db
+
+        # JWT Configuration
+        JWT_SECRET_KEY="your_strong_random_secret_key_here_at_least_32_chars" # IMPORTANT: Generate a strong secret key
+        ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+        # Example for JWT_SECRET_KEY generation (run in terminal):
+        # openssl rand -hex 32
+        ```
+
+    Replace placeholders:
+    *   `YOUR_MYSQL_USER`: Your MySQL username.
+    *   `YOUR_MYSQL_PASSWORD`: Your MySQL password.
+    *   `YOUR_MYSQL_HOST`: Hostname or IP of your MySQL server (e.g., `localhost`).
+    *   `YOUR_MYSQL_PORT`: Port of your MySQL server (default is `3306`).
+    *   `subscription_db`: The name of the database you created.
+    *   `your_strong_random_secret_key_here...`: A long, random, and secure string for signing JWTs.
+
+    6.7. Running the Application
+    ----------------------------
+    With the virtual environment activated and the `.env` file configured, run the
+    FastAPI application using Uvicorn from the project root directory (`subscription_service/`):
+    ```bash
+    uvicorn app.main:app --reload
+    ```
+    *   `app.main:app`: Points to the FastAPI instance `app` in the `app/main.py` file.
+    *   `--reload`: Enables auto-reloading when code changes are detected (for development).
+
+    The application should now be running, typically on `http://127.0.0.1:8000`.
+
+    6.8. Creating Initial Database Tables & Seeding Plans
+    -----------------------------------------------------
+    Upon the first run (or if tables are dropped), the application will attempt to:
+    1.  Create all necessary database tables based on the SQLAlchemy models defined
+        in `app/models.py`. This is handled by `models.Base.metadata.create_all(bind=engine)`
+        in `app/main.py`.
+    2.  Seed initial subscription plans (e.g., "Free Trial", "Basic", "Premium") if no
+        plans currently exist in the `plans` table. This is handled by the
+        `seed_initial_plans()` function called during application startup.
+
+--------------------------------------------------------------------------------
+7. API Endpoints and Usage
+--------------------------------------------------------------------------------
+
+The API provides interactive documentation via:
+*   **Swagger UI:** `http://127.0.0.1:8000/docs`
+*   **ReDoc:** `http://127.0.0.1:8000/redoc`
+
+These interfaces allow you to view all endpoints, their parameters, request/response
+models, and execute requests directly from your browser.
+
+Endpoints requiring authentication expect a JWT Bearer token in the `Authorization` header:
+`Authorization: Bearer <your_jwt_token>`
+
+    7.1. Authentication
+    -------------------
+        7.1.1. Register User (POST /users/)
+        -----------------------------------
+        *   **Description:** Creates a new user account.
+        *   **Request Body:** `application/json`
+            ```json
+            {
+              "username": "newuser",
+              "email": "user@example.com",
+              "password": "aStrongPassword123"
+            }
+            ```
+        *   **Response (201 Created):** `application/json`
+            ```json
+            {
+              "username": "newuser",
+              "email": "user@example.com",
+              "id": 1
+            }
+            ```
+        *   **Notes:** Passwords are hashed before storage. Email and username must be unique.
+
+        7.1.2. Login (Get JWT Token) (POST /token)
+        -------------------------------------------
+        *   **Description:** Authenticates a user and returns a JWT access token.
+        *   **Request Body:** `application/x-www-form-urlencoded`
+            *   `username`: The user's username.
+            *   `password`: The user's plain-text password.
+            (Use the "form-data" or "x-www-form-urlencoded" section in Postman or the Swagger UI form).
+        *   **Response (200 OK):** `application/json`
+            ```json
+            {
+              "access_token": "eyJhbGciOiJIUzI1NiIs...",
+              "token_type": "bearer"
+            }
+            ```
+        *   **Notes:** The returned `access_token` should be used in the `Authorization`
+            header for protected endpoints.
+
+    7.2. User Management
+    --------------------
+        7.2.1. Get Current User Details (GET /users/me/)
+        ------------------------------------------------
+        *   **Description:** Retrieves details for the currently authenticated user.
+        *   **Authentication:** Required (JWT Bearer Token).
+        *   **Response (200 OK):** `application/json`
+            ```json
+            {
+              "username": "currentuser",
+              "email": "current@example.com",
+              "id": 1
+            }
+            ```
+
+    7.3. Plan Management
+    --------------------
+        7.3.1. Retrieve All Available Plans (GET /plans/)
+        -------------------------------------------------
+        *   **Description:** Fetches a list of all available subscription plans.
+        *   **Authentication:** Not required (public endpoint).
+        *   **Query Parameters (Optional):**
+            *   `skip` (int, default 0): Number of records to skip for pagination.
+            *   `limit` (int, default 100): Maximum number of records to return.
+        *   **Response (200 OK):** `application/json` (List of Plan objects)
+            ```json
+            [
+              {
+                "name": "Basic",
+                "price": 9.99,
+                "features": "Access to basic features, monthly",
+                "duration_days": 30,
+                "id": 1
+              },
+              // ... more plans
+            ]
+            ```
+
+        7.3.2. Create New Plan (POST /plans/) - Requires Auth
+        -----------------------------------------------------
+        *   **Description:** Creates a new subscription plan.
+        *   **Authentication:** Required (JWT Bearer Token). (Note: Role-based access, e.g., admin-only, might be desired in a full application).
+        *   **Request Body:** `application/json`
+            ```json
+            {
+              "name": "Gold Plan",
+              "price": 29.99,
+              "features": "All premium features, extended support",
+              "duration_days": 30
+            }
+            ```
+        *   **Response (201 Created):** `application/json` (The created Plan object)
+            ```json
+            {
+              "name": "Gold Plan",
+              "price": 29.99,
+              "features": "All premium features, extended support",
+              "duration_days": 30,
+              "id": 5
+            }
+            ```
+
+    7.4. Subscription Management (Requires Authentication)
+    -----------------------------------------------------
+    All subscription management endpoints require JWT Bearer Token authentication and
+    operate on the authenticated user's subscription(s).
+
+        7.4.1. Create New Subscription (POST /subscriptions/me/)
+        -------------------------------------------------------
+        *   **Description:** Allows the authenticated user to subscribe to a specific plan.
+        *   **Request Body:** `application/json`
+            ```json
+            {
+              "plan_id": 1
+            }
+            ```
+        *   **Response (201 Created):** `application/json` (Details of the new subscription)
+            ```json
+            {
+              "user_id": 1, // Authenticated user's ID
+              "plan_id": 1,
+              "id": 101,
+              "start_date": "2024-05-29",
+              "end_date": "2024-06-28",
+              "status": "ACTIVE",
+              "plan": {
+                "name": "Basic",
+                "price": 9.99,
+                "features": "Access to basic features, monthly",
+                "duration_days": 30,
+                "id": 1
+              }
+            }
+            ```
+        *   **Error Responses:**
+            *   404 Not Found: If the specified `plan_id` does not exist.
+            *   409 Conflict: If the user already has an active subscription.
+
+        7.4.2. Retrieve User's Active Subscription (GET /subscriptions/me/)
+        ------------------------------------------------------------------
+        *   **Description:** Retrieves details of the authenticated user's current active subscription.
+        *   **Response (200 OK):** `application/json` (Subscription object, same structure as POST response)
+        *   **Error Responses:**
+            *   404 Not Found: If the user has no active subscription.
+
+        7.4.3. Update User's Subscription Plan (PUT /subscriptions/me/)
+        --------------------------------------------------------------
+        *   **Description:** Allows the authenticated user to upgrade or downgrade their active subscription to a new plan.
+        *   **Request Body:** `application/json`
+            ```json
+            {
+              "new_plan_id": 2
+            }
+            ```
+        *   **Response (200 OK):** `application/json` (Details of the updated subscription)
+        *   **Error Responses:**
+            *   404 Not Found: If the user has no active subscription or the `new_plan_id` is invalid.
+            *   400 Bad Request: If the user is already on the `new_plan_id`.
+        *   **Note:** The end date is recalculated based on the new plan's duration starting from the update date. Proration logic is not implemented in this version.
+
+        7.4.4. Cancel User's Subscription (DELETE /subscriptions/me/)
+        ------------------------------------------------------------
+        *   **Description:** Allows the authenticated user to cancel their active subscription.
+        *   **Response (204 No Content):** Indicates successful cancellation.
+        *   **Error Responses:**
+            *   404 Not Found: If the user has no active subscription to cancel.
+            *   400 Bad Request: If the subscription is already cancelled.
+        *   **Note:** Sets the subscription status to "CANCELLED". The subscription may remain usable until its original `end_date` depending on business logic (not explicitly handled for immediate termination in this version).
+
+--------------------------------------------------------------------------------
+8. Background Tasks
+--------------------------------------------------------------------------------
+
+    8.1. Automatic Subscription Expiration
+    --------------------------------------
+    *   A background task runs periodically (default: daily at 01:00 server time, configured in `app/services/scheduler.py`).
+    *   This task queries the database for subscriptions with `status = "ACTIVE"` and an `end_date` that is less than or equal to the current date.
+    *   For each such subscription, its status is updated to "EXPIRED".
+    *   The scheduler uses the `schedule` library running in a separate thread.
+
+--------------------------------------------------------------------------------
+9. Data Models
+--------------------------------------------------------------------------------
+
+SQLAlchemy ORM models are defined in `app/models.py`.
+
+    9.1. User Model (`users` table)
+    -----------------------------
+    *   `id` (Integer, Primary Key)
+    *   `username` (String, Unique, Not Null)
+    *   `email` (String, Unique, Not Null)
+    *   `hashed_password` (String, Not Null) - Stores bcrypt hash of the password.
+
+    9.2. Plan Model (`plans` table)
+    -----------------------------
+    *   `id` (Integer, Primary Key)
+    *   `name` (String, Unique, Not Null)
+    *   `price` (Float, Not Null)
+    *   `features` (Text)
+    *   `duration_days` (Integer, Not Null) - Duration of the plan in days.
+
+    9.3. Subscription Model (`subscriptions` table)
+    ---------------------------------------------
+    *   `id` (Integer, Primary Key)
+    *   `user_id` (Integer, Foreign Key to User.id, Not Null)
+    *   `plan_id` (Integer, Foreign Key to Plan.id, Not Null)
+    *   `start_date` (Date, Not Null)
+    *   `end_date` (Date, Not Null)
+    *   `status` (Enum, Not Null, Default: ACTIVE) - See Subscription Statuses.
+
+    9.4. Subscription Statuses
+    --------------------------
+    Defined as an Enum (`SubscriptionStatusEnum` in `app/models.py`):
+    *   `ACTIVE`: The subscription is currently active and in use.
+    *   `INACTIVE`: (Placeholder) Could be used if a subscription is paused or payment failed.
+    *   `CANCELLED`: The user has explicitly cancelled the subscription.
+    *   `EXPIRED`: The subscription duration has passed, and it is no longer active.
+
+--------------------------------------------------------------------------------
+10. Non-Functional Requirements Considerations
+--------------------------------------------------------------------------------
+While not fully implemented with advanced solutions, the design considers:
+
+    10.1. Scalability
+    -----------------
+    *   Stateless API design (mostly, DB sessions per request).
+    *   Database connection pooling (SQLAlchemy default).
+    *   Potential for horizontal scaling by running multiple Uvicorn instances behind a load balancer.
+    *   Background tasks: Current `schedule` library is simple; for very high scale, a distributed task queue (Celery, RQ) would be better.
+
+    10.2. Fault Tolerance
+    ---------------------
+    *   Retry mechanisms (`tenacity` library) are implemented for critical database write operations in `app/crud.py` to handle transient errors.
+
+    10.3. Performance
+    -----------------
+    *   FastAPI framework is inherently fast.
+    *   Database indexing on foreign keys and primary keys.
+    *   Consideration for caching (e.g., `/plans` endpoint) for frequently accessed, slowly changing data (basic in-memory example provided conceptually, `fastapi-cache2` recommended for production).
+
+    10.4. Security
+    ----------------
+    *   **Authentication:** JWT-based authentication for protecting sensitive endpoints.
+    *   **Password Security:** Passwords are hashed using bcrypt (`passlib`) before storage; plain-text passwords are never stored.
+    *   **Data in Transit:** Requires HTTPS in production (to be configured at the reverse proxy/load balancer level) to encrypt communication between client and server.
+    *   **Data at Rest:** Database-level encryption (e.g., MySQL TDE, cloud provider options) can be enabled on the database server itself.
+    *   **Input Validation:** Pydantic models provide robust validation for all incoming request data.
+
+--------------------------------------------------------------------------------
+11. Further Development & Considerations
+--------------------------------------------------------------------------------
+
+*   **Role-Based Access Control (RBAC):** Implement distinct roles (e.g., user, admin) to control access to administrative endpoints like plan creation.
+*   **Payment Gateway Integration:** For real subscriptions, integrate with a payment provider (Stripe, PayPal).
+*   **Advanced Subscription Logic:** Implement proration for plan changes, grace periods, dunning management for failed payments.
+*   **Robust Background Task System:** Replace `schedule` with Celery or RQ for better scalability and management of background tasks (e.g., email notifications, payment processing).
+*   **Comprehensive Logging and Monitoring:** Integrate structured logging and monitoring tools (e.g., ELK stack, Prometheus, Grafana).
+*   **Testing:** Add unit and integration tests.
+*   **Database Migrations:** Use Alembic for managing database schema changes in a controlled manner, especially in production.
+*   **More Sophisticated Caching:** Implement distributed caching (e.g., Redis with `fastapi-cache2`) for improved performance.
+*   **Webhook Support:** For notifications to external systems upon subscription events.
+
+--------------------------------------------------------------------------------
+12. Troubleshooting
+--------------------------------------------------------------------------------
+
+*   **`ModuleNotFoundError: No module named 'app'`:** Ensure you are running `uvicorn` from the project root directory (`subscription_service/`) and that all `__init__.py` files are correctly named (double underscores).
+*   **Database Connection Errors:** Verify `DATABASE_URL` in your `.env` file and ensure your MySQL server is running and accessible. Check MySQL user permissions.
+*   **Internal Server Errors (500):** Check the Uvicorn terminal output for detailed Python tracebacks. This often indicates an unhandled exception in the application code or a database schema mismatch (e.g., missing `hashed_password` column after code update).
+*   **Authentication Issues (401 Unauthorized):**
+    *   Ensure you are sending the JWT token in the `Authorization: Bearer <token>` header.
+    *   Verify the token is not expired.
+    *   Confirm the `JWT_SECRET_KEY` in `.env` matches the one used to sign the token (especially if running multiple instances or restarting).
+*   **Pydantic Validation Errors (422 Unprocessable Entity):** Check the error details in the response body. Ensure your request payload matches the Pydantic schema defined for the endpoint.
+
+================================================================================
+End of Documentation
+================================================================================
